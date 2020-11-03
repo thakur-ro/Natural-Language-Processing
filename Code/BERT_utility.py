@@ -55,7 +55,9 @@ class BERT_utility:
     def __init__(self):
         self.bert_tokenizer = BertTokenizer.from_pretrained(bert_config['ncbi_base_path'])
 
-        self.bert_model = BertModel.from_pretrained(bert_config['ncbi_base_path'])
+        self.bert_model = pickle.load(open("C:/Users/itsma/Documents/CS 6120 Project/CS6120/Model/finetuned_model.pkl","rb"))
+        
+        self.bert_model.cpu()
     
     def process_string_finetune(self, string_input, padding_length):
         sentences = string_input.split("\n")
@@ -64,7 +66,7 @@ class BERT_utility:
 
         word_list = list()
         
-        encoding_list = list()
+        #encoding_list = list()
 
         for index in range(len(sentences)):
             sentence = sentences[index]
@@ -79,13 +81,13 @@ class BERT_utility:
             if(len(encodings)>=512):
                 encodings = encodings[0:512]
             
-            encoding_list.append(encodings)
+            #encoding_list.append(encodings)
             
             input_ids = torch.tensor(encodings).long().unsqueeze(0)
 
-            #outputs = self.bert_model(input_ids,token_type_ids=None)
+            outputs = self.bert_model(input_ids,token_type_ids=None)
 
-            #bert_vector = outputs
+            bert_vector = outputs
 
             bert_tokens = self.bert_tokenizer.convert_ids_to_tokens(encodings) 
 
@@ -132,7 +134,7 @@ class BERT_utility:
 
                 positions_covered = token_position + len(current_word)
                 
-                '''
+                
                 vec_list = []
                 for entry in bert_token_positions:
                     vec_list.append(bert_vector[0][0][entry].data.numpy())
@@ -140,16 +142,15 @@ class BERT_utility:
                 vec_word = np.mean(vec_list,axis=0)
 
                 new_dict["keyword_vector"] = vec_word
-                '''
                 
                 new_dict["sentence_index"] = index + 1
 
                 new_dict["word_index"] = word_index
                 
-                new_dict["bert_token_positions"] = bert_token_positions
+                #new_dict["bert_token_positions"] = bert_token_positions
 
                 word_list.append(new_dict)
 
                 word_index = word_index + 1
 
-        return word_list, encoding_list
+        return word_list#, encoding_list
