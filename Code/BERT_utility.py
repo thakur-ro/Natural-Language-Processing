@@ -8,7 +8,6 @@ import pickle
 from keras.preprocessing.sequence import pad_sequences
 from BERT_config import bert_config
 
-
 def get_bert_token_positions(input_text,token_list,start_from_pos=0,prior_partial_word=""):
     partial_word = ""
 
@@ -52,13 +51,26 @@ def get_bert_token_positions(input_text,token_list,start_from_pos=0,prior_partia
     return [pos_list,partial_word]
 
 class BERT_utility:
-    def __init__(self):
-        self.bert_tokenizer = BertTokenizer.from_pretrained(bert_config['ncbi_base_path'])
-
-        self.bert_model = pickle.load(open("C:/Users/itsma/Documents/CS 6120 Project/CS6120/Model/finetuned_model.pkl","rb"))
+    def __init__(self, get_encodings = False, get_embeddings = True, use_finetuned_model=False):
         
-        self.bert_model.cpu()
+        self.bert_tokenizer = BertTokenizer.from_pretrained(bert_config['ncbi_base_path'])
+        
+        if(use_finetuned_model):
+            self.model_in_use = "FINETUNED"
+            self.bert_model = pickle.load(open(bert_config['entity_finetuned_model_path'],"rb"))
+            self.bert_model.cpu()
+        else:
+            self.model_in_use = "BASE"
+            self.bert_model = BertModel.from_pretrained(bert_config['ncbi_base_path'])
+            
+        self.get_encodings = get_encodings
+        self.get_embeddings = get_embeddings
     
+    def get_embeddings_for_nsp(self,first_sentence, second_sentence):
+        encoding = self.bert_tokenizer(first_sentence, second_sentence, return_tensors='pt')['input_ids'][0]
+
+        return encoding
+
     def process_string_finetune(self, string_input, padding_length):
         sentences = string_input.split("\n")
 
@@ -66,7 +78,8 @@ class BERT_utility:
 
         word_list = list()
         
-        #encoding_list = list()
+        if(self.get_encodings):
+            encoding_list = list()
 
         for index in range(len(sentences)):
             sentence = sentences[index]
@@ -77,17 +90,16 @@ class BERT_utility:
 
             encodings = self.bert_tokenizer.encode(bert_input,add_special_tokens = True)
             
-            
             if(len(encodings)>=512):
                 encodings = encodings[0:512]
             
-            #encoding_list.append(encodings)
+            if(self.get_encodings):
+                encoding_list.append(encodings)
             
             input_ids = torch.tensor(encodings).long().unsqueeze(0)
-
-            outputs = self.bert_model(input_ids,token_type_ids=None)
-
-            bert_vector = outputs
+            
+            if(self.get_embeddings):
+                bert_vector = self.bert_model(input_ids,token_type_ids=None)
 
             bert_tokens = self.bert_tokenizer.convert_ids_to_tokens(encodings) 
 
@@ -134,23 +146,31 @@ class BERT_utility:
 
                 positions_covered = token_position + len(current_word)
                 
-                
-                vec_list = []
-                for entry in bert_token_positions:
-                    vec_list.append(bert_vector[0][0][entry].data.numpy())
+                if(self.get_embeddings):
+                    vec_list = []
+                    
+                    for entry in bert_token_positions:
+                        if(self.model_in_use == "FINETUNED"):
+                            vec_list.append(bert_vector[1][12][0][entry].data.numpy())
+                        else:
+                            vec_list.append(bert_vector[0][0][entry].data.numpy())
 
-                vec_word = np.mean(vec_list,axis=0)
+                    vec_word = np.mean(vec_list,axis=0)
 
-                new_dict["keyword_vector"] = vec_word
+                    new_dict["keyword_vector"] = vec_word
                 
                 new_dict["sentence_index"] = index + 1
 
                 new_dict["word_index"] = word_index
                 
-                #new_dict["bert_token_positions"] = bert_token_positions
+                if(self.get_encodings):
+                    new_dict["bert_token_positions"] = bert_token_positions
 
                 word_list.append(new_dict)
 
                 word_index = word_index + 1
+        
+        if(self.get_encodings):
+            self.encoding_list = encoding_list
 
-        return word_list#, encoding_list
+        return word_list 
